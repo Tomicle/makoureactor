@@ -22,6 +22,7 @@
 #include "core/field/FieldModelLoaderPC.h"
 #include "core/field/Section1File.h"
 #include "core/field/InfFile.h"
+#include "core/field/IdFile.h"
 
 // Playable character IDs as used by the PC opcode (0 Cloud .. 8 Cid)
 static const int PLAYABLE_CHARACTER_COUNT = 9;
@@ -329,6 +330,46 @@ QJsonObject Census::fieldReport(int mapID, Field *field)
 		report["gateways"] = gateways;
 		report["gatewayCount"] = gateways.size();
 		_fieldsWithGateways += gateways.isEmpty() ? 0 : 1;
+	}
+
+	// Walkmesh (Section 5): triangle vertices + centroids, only with --scripts (large)
+	if (_withScripts) {
+		IdFile *walkmesh = field->walkmesh();
+		if (walkmesh != nullptr && walkmesh->isOpen()) {
+			QJsonArray tris;
+			int id = 0;
+			for (const Triangle &t : walkmesh->triangles()) {
+				QJsonObject tri;
+				tri["id"] = id;
+				QJsonArray verts;
+				int cx = 0, cy = 0, cz = 0;
+				for (int i = 0; i < 3; ++i) {
+					QJsonArray v;
+					v.append(t.vertices[i].x);
+					v.append(t.vertices[i].y);
+					v.append(t.vertices[i].z);
+					verts.append(v);
+					cx += t.vertices[i].x;
+					cy += t.vertices[i].y;
+					cz += t.vertices[i].z;
+				}
+				tri["v"] = verts;
+				QJsonArray c;
+				c.append(cx / 3);
+				c.append(cy / 3);
+				c.append(cz / 3);
+				tri["centroid"] = c;
+				const Access &acc = walkmesh->access(id);
+				QJsonArray adj;
+				for (int i = 0; i < 3; ++i) {
+					adj.append(acc.a[i]);
+				}
+				tri["adjacent"] = adj;
+				tris.append(tri);
+				++id;
+			}
+			report["walkmesh"] = tris;
+		}
 	}
 
 	if (modelLoader != nullptr) {
