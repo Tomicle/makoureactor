@@ -68,8 +68,8 @@ const QList<OpcodeKey> &Census::detailedOpcodes()
 	return keys;
 }
 
-Census::Census(FieldArchive *archive, bool withOccurrences) :
-    _archive(archive), _withOccurrences(withOccurrences), _fieldsWithAllPlayable(0)
+Census::Census(FieldArchive *archive, bool withOccurrences, bool withScripts) :
+    _archive(archive), _withOccurrences(withOccurrences), _withScripts(withScripts), _fieldsWithAllPlayable(0)
 {
 }
 
@@ -213,6 +213,7 @@ QJsonObject Census::fieldReport(int mapID, Field *field)
 		}
 
 		QJsonArray scriptSizes;
+		QJsonArray scriptTexts;
 		int entityOpcodes = 0;
 		qsizetype entityBytes = 0;
 		const QVarLengthArray<Script> &scripts = group.scripts();
@@ -221,6 +222,13 @@ QJsonObject Census::fieldReport(int mapID, Field *field)
 			qsizetype bytes = script.toByteArray().size();
 			scriptSizes.append(int(bytes));
 			entityBytes += bytes;
+			if (_withScripts) {
+				QJsonObject text;
+				text["id"] = scriptID;
+				text["name"] = group.scriptName(quint8(scriptID));
+				text["text"] = script.isEmpty() ? QString() : script.toString(section1);
+				scriptTexts.append(text);
+			}
 
 			int opcodeID = 0;
 			for (const Opcode &opcode : script.opcodes()) {
@@ -248,6 +256,9 @@ QJsonObject Census::fieldReport(int mapID, Field *field)
 			}
 		}
 		entity["scriptBytes"] = scriptSizes;
+		if (_withScripts) {
+			entity["scripts"] = scriptTexts;
+		}
 		entity["opcodeCount"] = entityOpcodes;
 		totalOpcodes += entityOpcodes;
 		totalScriptBytes += entityBytes;

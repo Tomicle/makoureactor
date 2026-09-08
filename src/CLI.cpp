@@ -375,7 +375,7 @@ void CLI::commandCensus()
 
 	QList<int> selectedFields = selectFields(fieldArchive, argsCensus.includes(), argsCensus.excludes());
 
-	Census census(fieldArchive, argsCensus.occurrences());
+	Census census(fieldArchive, argsCensus.occurrences(), argsCensus.scripts());
 	QJsonObject root = census.run(selectedFields);
 	root["archive"] = argsCensus.path();
 

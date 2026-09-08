@@ -27,6 +27,7 @@ public:
 	QString output() const;
 	bool occurrences() const;
 	bool pretty() const;
+	bool scripts() const;
 private:
 	void parse();
 };

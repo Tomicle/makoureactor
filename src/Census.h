@@ -34,7 +34,7 @@ class FieldArchive;
 class Census
 {
 public:
-	Census(FieldArchive *archive, bool withOccurrences);
+	Census(FieldArchive *archive, bool withOccurrences, bool withScripts = false);
 
 	QJsonObject fieldReport(int mapID, Field *field);
 	QJsonObject run(const QList<int> &mapIDs);
@@ -48,6 +48,7 @@ private:
 
 	FieldArchive *_archive;
 	bool _withOccurrences;
+	bool _withScripts;
 	QMap<QString, int> _fieldsWithOpcode;
 	QMap<int, int> _fieldsWithPcCharacter;
 	int _fieldsWithAllPlayable;

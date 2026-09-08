@@ -23,6 +23,7 @@ ArgumentsCensus::ArgumentsCensus() : CommonArguments()
 	              "Write the JSON report to this file instead of standard output.", "output", "");
 	_ADD_FLAG("no-occurrences", "Omit the per-opcode occurrence list (entity/script/index) and keep only counts.");
 	_ADD_FLAG("pretty", "Indent the JSON output.");
+	_ADD_FLAG("scripts", "Include the decoded text of every entity script (large output; combine with --include).");
 
 	parse();
 }
@@ -40,6 +41,11 @@ bool ArgumentsCensus::occurrences() const
 bool ArgumentsCensus::pretty() const
 {
 	return _parser.isSet("pretty");
+}
+
+bool ArgumentsCensus::scripts() const
+{
+	return _parser.isSet("scripts");
 }
 
 void ArgumentsCensus::parse()
