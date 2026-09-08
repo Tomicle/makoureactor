@@ -65,7 +65,8 @@ public:
 		//Import,
 		Patch,
 		Tools,
-		Census
+		Census,
+		ScriptEdit
 	};
 	Arguments();
 	inline Command command() const {

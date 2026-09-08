@@ -22,6 +22,9 @@
 #include "ArgumentsTools.h"
 #include "ArgumentsCensus.h"
 #include "Census.h"
+#include "ArgumentsScriptEdit.h"
+#include "ScriptEdit.h"
+#include "core/field/Section1File.h"
 #include "core/field/FieldArchivePS.h"
 #include "core/field/FieldArchivePC.h"
 #include "core/field/BackgroundFilePC.h"
@@ -401,6 +404,86 @@ void CLI::commandCensus()
 	delete fieldArchive;
 }
 
+void CLI::commandScriptEdit()
+{
+	ArgumentsScriptEdit args;
+	if (args.help() || args.path().isEmpty() || args.field().isEmpty() || args.opsFile().isEmpty()) {
+		args.showHelp();
+	}
+
+	QFile opsFile(args.opsFile());
+	if (!opsFile.open(QIODevice::ReadOnly)) {
+		qWarning() << qPrintable(QCoreApplication::translate("CLI", "Cannot open ops file")) << qPrintable(opsFile.errorString());
+		exit(1);
+	}
+	QJsonParseError parseError;
+	QJsonDocument opsDoc = QJsonDocument::fromJson(opsFile.readAll(), &parseError);
+	if (parseError.error != QJsonParseError::NoError || !opsDoc.isArray()) {
+		qWarning() << qPrintable(QCoreApplication::translate("CLI", "Ops file must be a JSON array:")) << qPrintable(parseError.errorString());
+		exit(1);
+	}
+
+	FieldArchive *fieldArchive = openFieldArchive(args.inputFormat(), args.path());
+	if (fieldArchive == nullptr) {
+		exit(1);
+	}
+
+	QList<int> matches = selectFields(fieldArchive, QStringList(args.field()), QStringList());
+	Field *field = matches.size() == 1 ? fieldArchive->field(matches.first()) : nullptr;
+	if (field == nullptr) {
+		qWarning() << qPrintable(QCoreApplication::translate("CLI", "Field not found:")) << qPrintable(args.field());
+		delete fieldArchive;
+		exit(1);
+	}
+	Section1File *section1 = field->scriptsAndTexts();
+	if (section1 == nullptr || !section1->isOpen()) {
+		qWarning() << qPrintable(QCoreApplication::translate("CLI", "Cannot read scripts of field")) << qPrintable(args.field());
+		delete fieldArchive;
+		exit(1);
+	}
+
+	ScriptEdit edit(section1);
+	QString error;
+	if (!edit.apply(opsDoc.array(), error)) {
+		qWarning() << qPrintable(QCoreApplication::translate("CLI", "Edit failed:")) << qPrintable(error);
+		delete fieldArchive;
+		exit(1);
+	}
+
+	int groupID, scriptID, opcodeID;
+	if (!section1->compileScripts(groupID, scriptID, opcodeID, error)) {
+		qWarning() << qPrintable(QCoreApplication::translate("CLI", "Script compilation failed at entity %1 script %2 opcode %3:")
+		                             .arg(groupID).arg(scriptID).arg(opcodeID)) << qPrintable(error);
+		delete fieldArchive;
+		exit(1);
+	}
+
+	QList<QPair<int, int>> touched = edit.touched().values();
+	std::sort(touched.begin(), touched.end());
+	for (const QPair<int, int> &t : touched) {
+		std::cout << qPrintable(edit.describe(t.first, t.second)) << std::endl;
+	}
+
+	if (args.dryRun()) {
+		qInfo() << qPrintable(QCoreApplication::translate("CLI", "Dry run: nothing saved."));
+		delete fieldArchive;
+		return;
+	}
+
+	section1->setModified(true);
+	field->setModified(true);
+
+	FieldArchiveIO::ErrorCode err = fieldArchive->save(args.targetFile());
+	if (err != FieldArchiveIO::Ok) {
+		qWarning() << qPrintable(QCoreApplication::translate("CLI", "Save failed (error code %1)").arg(int(err)));
+		delete fieldArchive;
+		exit(1);
+	}
+	qInfo() << qPrintable(QCoreApplication::translate("CLI", "Saved")) << qPrintable(args.targetFile());
+
+	delete fieldArchive;
+}
+
 FieldArchive *CLI::openFieldArchive(const QString &ext, const QString &path)
 {
 	bool isPS;
@@ -498,6 +581,9 @@ void CLI::exec()
 		break;
 	case Arguments::Census:
 		commandCensus();
+		break;
+	case Arguments::ScriptEdit:
+		commandScriptEdit();
 		break;
 	}
 }
