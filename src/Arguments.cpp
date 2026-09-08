@@ -158,6 +158,7 @@ Arguments::Arguments() :
 	        "  export           Export various assets from archive to files\n"
 	        "  patch            Patch archive\n"
 	        "  unpack-bg-mod    Unpack background mod packed with Palmer\n"
+	        "  census           Survey entities, party/movement opcodes and script budget as JSON\n"
 	        "\n"
 	        "\"%1 export --help\" to see help of the specific subcommand"
 	    ).arg(QFileInfo(qApp->arguments().first()).fileName())
@@ -185,6 +186,8 @@ void Arguments::parse()
 		_command = Patch;
 	}  else if (command == "unpack-bg-mod") {
 		_command = Tools;
+	} else if (command == "census") {
+		_command = Census;
 	} else {
 		qWarning() << qPrintable(QCoreApplication::translate("Arguments", "Unknown command type:")) << qPrintable(command);
 		return;

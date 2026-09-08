@@ -20,6 +20,8 @@
 #include "ArgumentsExport.h"
 #include "ArgumentsPatch.h"
 #include "ArgumentsTools.h"
+#include "ArgumentsCensus.h"
+#include "Census.h"
 #include "core/field/FieldArchivePS.h"
 #include "core/field/FieldArchivePC.h"
 #include "core/field/BackgroundFilePC.h"
@@ -320,6 +322,85 @@ void CLI::commandTools()
 	delete fieldArchive;
 }
 
+QList<int> CLI::selectFields(FieldArchive *fieldArchive, const QStringList &includePatterns, const QStringList &excludePatterns)
+{
+	QList<int> selectedFields;
+	QList<QRegularExpression> includes, excludes;
+
+	for (const QString &pattern: includePatterns) {
+		includes.append(QRegularExpression(QRegularExpression::anchoredPattern(QRegularExpression::wildcardToRegularExpression(pattern))));
+	}
+	for (const QString &pattern: excludePatterns) {
+		excludes.append(QRegularExpression(QRegularExpression::anchoredPattern(QRegularExpression::wildcardToRegularExpression(pattern))));
+	}
+
+	FieldArchiveIterator it(*fieldArchive);
+	while (it.hasNext()) {
+		const Field *field = it.next(false);
+		if (field != nullptr) {
+			bool found = includes.isEmpty();
+			for (const QRegularExpression &regExp: includes) {
+				if (regExp.match(field->name()).hasMatch()) {
+					found = true;
+					break;
+				}
+			}
+			for (const QRegularExpression &regExp: excludes) {
+				if (regExp.match(field->name()).hasMatch()) {
+					found = false;
+					break;
+				}
+			}
+
+			if (found) {
+				selectedFields.append(it.mapId());
+			}
+		}
+	}
+
+	return selectedFields;
+}
+
+void CLI::commandCensus()
+{
+	ArgumentsCensus argsCensus;
+	if (argsCensus.help() || argsCensus.path().isEmpty()) {
+		argsCensus.showHelp();
+	}
+
+	FieldArchive *fieldArchive = openFieldArchive(argsCensus.inputFormat(), argsCensus.path());
+	if (fieldArchive == nullptr) {
+		return;
+	}
+
+	QList<int> selectedFields = selectFields(fieldArchive, argsCensus.includes(), argsCensus.excludes());
+
+	Census census(fieldArchive, argsCensus.occurrences());
+	QJsonObject root = census.run(selectedFields);
+	root["archive"] = argsCensus.path();
+
+	QJsonDocument doc(root);
+	QByteArray json = doc.toJson(argsCensus.pretty() ? QJsonDocument::Indented : QJsonDocument::Compact);
+
+	if (argsCensus.output().isEmpty()) {
+		std::cout.write(json.constData(), json.size());
+		std::cout << std::endl;
+	} else {
+		QFile f(argsCensus.output());
+		if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			qWarning() << qPrintable(QCoreApplication::translate("CLI", "Cannot write output file")) << qPrintable(f.errorString());
+		} else {
+			f.write(json);
+			f.write("\n");
+			f.close();
+			qInfo() << qPrintable(QCoreApplication::translate("CLI", "Census written to")) << qPrintable(argsCensus.output())
+			        << qPrintable(QCoreApplication::translate("CLI", "(%n field(s))", nullptr, int(selectedFields.size())));
+		}
+	}
+
+	delete fieldArchive;
+}
+
 FieldArchive *CLI::openFieldArchive(const QString &ext, const QString &path)
 {
 	bool isPS;
@@ -414,6 +495,9 @@ void CLI::exec()
 		break;
 	case Arguments::Tools:
 		commandTools();
+		break;
+	case Arguments::Census:
+		commandCensus();
 		break;
 	}
 }

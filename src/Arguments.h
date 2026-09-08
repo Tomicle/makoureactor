@@ -64,7 +64,8 @@ public:
 		Export,
 		//Import,
 		Patch,
-		Tools
+		Tools,
+		Census
 	};
 	Arguments();
 	inline Command command() const {

@@ -51,6 +51,8 @@ private:
 	static void commandExport();
 	static void commandPatch();
 	static void commandTools();
+	static void commandCensus();
 	static FieldArchive *openFieldArchive(const QString &ext, const QString &path);
+	static QList<int> selectFields(FieldArchive *fieldArchive, const QStringList &includePatterns, const QStringList &excludePatterns);
 	static CLIObserver observer;
 };
