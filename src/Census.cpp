@@ -21,6 +21,7 @@
 #include "core/field/FieldPC.h"
 #include "core/field/FieldModelLoaderPC.h"
 #include "core/field/Section1File.h"
+#include "core/field/InfFile.h"
 
 // Playable character IDs as used by the PC opcode (0 Cloud .. 8 Cid)
 static const int PLAYABLE_CHARACTER_COUNT = 9;
@@ -69,7 +70,7 @@ const QList<OpcodeKey> &Census::detailedOpcodes()
 }
 
 Census::Census(FieldArchive *archive, bool withOccurrences, bool withScripts) :
-    _archive(archive), _withOccurrences(withOccurrences), _withScripts(withScripts), _fieldsWithAllPlayable(0)
+    _archive(archive), _withOccurrences(withOccurrences), _withScripts(withScripts), _fieldsWithAllPlayable(0), _fieldsWithGateways(0)
 {
 }
 
@@ -297,6 +298,39 @@ QJsonObject Census::fieldReport(int mapID, Field *field)
 		++_fieldsWithAllPlayable;
 	}
 
+	// Gateways (Section 8 "inf"): exit lines with destination field and spawn position
+	InfFile *inf = field->inf();
+	if (inf != nullptr && inf->isOpen()) {
+		QJsonArray gateways;
+		int id = 0;
+		for (const Exit &exit : inf->exitLines()) {
+			if (exit.fieldID != 0x7FFF) {
+				QJsonObject g;
+				g["id"] = id;
+				g["toMapId"] = exit.fieldID;
+				g["toMap"] = _archive->mapName(exit.fieldID);
+				g["destX"] = exit.destination.x;
+				g["destY"] = exit.destination.y;
+				g["destTriangle"] = exit.destination.z;
+				g["destDir"] = exit.dir;
+				QJsonArray line;
+				for (int i = 0; i < 2; ++i) {
+					QJsonArray v;
+					v.append(exit.exit_line[i].x);
+					v.append(exit.exit_line[i].y);
+					v.append(exit.exit_line[i].z);
+					line.append(v);
+				}
+				g["line"] = line;
+				gateways.append(g);
+			}
+			++id;
+		}
+		report["gateways"] = gateways;
+		report["gatewayCount"] = gateways.size();
+		_fieldsWithGateways += gateways.isEmpty() ? 0 : 1;
+	}
+
 	if (modelLoader != nullptr) {
 		QJsonArray models;
 		for (int i = 0; i < modelLoader->modelCount(); ++i) {
@@ -324,6 +358,7 @@ QJsonObject Census::run(const QList<int> &mapIDs)
 	_fieldsWithOpcode.clear();
 	_fieldsWithPcCharacter.clear();
 	_fieldsWithAllPlayable = 0;
+	_fieldsWithGateways = 0;
 
 	QJsonArray fields;
 	int errors = 0;
@@ -349,6 +384,7 @@ QJsonObject Census::run(const QList<int> &mapIDs)
 	summary["fields"] = int(mapIDs.size());
 	summary["errors"] = errors;
 	summary["fieldsWithAllPlayablePc"] = _fieldsWithAllPlayable;
+	summary["fieldsWithGateways"] = _fieldsWithGateways;
 
 	QJsonObject withOpcode;
 	for (auto it = _fieldsWithOpcode.constBegin(); it != _fieldsWithOpcode.constEnd(); ++it) {

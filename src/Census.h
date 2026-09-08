@@ -52,4 +52,5 @@ private:
 	QMap<QString, int> _fieldsWithOpcode;
 	QMap<int, int> _fieldsWithPcCharacter;
 	int _fieldsWithAllPlayable;
+	int _fieldsWithGateways;
 };
