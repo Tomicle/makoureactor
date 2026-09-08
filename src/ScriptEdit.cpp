@@ -83,6 +83,34 @@ bool ScriptEdit::resolveIndex(const QJsonValue &value, const Script &script, boo
 
 bool ScriptEdit::makeOpcode(const QJsonObject &op, Opcode &out, QString &error) const
 {
+	if (op.contains("label")) {
+		// Pseudo-opcode: jump target. Emits no bytes; jumps referencing it are resolved at compile time.
+		OpcodeLABEL label;
+		label._label = quint16(op.value("label").toInt());
+		out = Opcode(label);
+		return true;
+	}
+
+	if (op.contains("goto")) {
+		// Unconditional jump to a label declared with "label". Direction/size are fixed up by compile().
+		quint16 target = quint16(op.value("goto").toInt());
+		bool backward = op.value("backward").toBool(true);
+		if (backward) {
+			OpcodeJMPB jump;
+			jump.jump = 0;
+			jump._label = target;
+			jump._badJump = 0;
+			out = Opcode(jump);
+		} else {
+			OpcodeJMPF jump;
+			jump.jump = 0;
+			jump._label = target;
+			jump._badJump = 0;
+			out = Opcode(jump);
+		}
+		return true;
+	}
+
 	if (op.contains("hex")) {
 		QString hex = op.value("hex").toString().simplified().remove(' ');
 		QByteArray bytes = QByteArray::fromHex(hex.toLatin1());
