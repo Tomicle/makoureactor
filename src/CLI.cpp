@@ -445,15 +445,14 @@ void CLI::commandScriptEdit()
 	ScriptEdit edit(section1);
 	QString error;
 	if (!edit.apply(opsDoc.array(), error)) {
-		qWarning() << qPrintable(QCoreApplication::translate("CLI", "Edit failed:")) << qPrintable(error);
+		std::cerr << "Edit failed: " << qPrintable(error) << std::endl;
 		delete fieldArchive;
 		exit(1);
 	}
 
 	int groupID, scriptID, opcodeID;
 	if (!section1->compileScripts(groupID, scriptID, opcodeID, error)) {
-		qWarning() << qPrintable(QCoreApplication::translate("CLI", "Script compilation failed at entity %1 script %2 opcode %3:")
-		                             .arg(groupID).arg(scriptID).arg(opcodeID)) << qPrintable(error);
+		std::cerr << "Script compilation failed at entity " << groupID << " script " << scriptID << " opcode " << opcodeID << ": " << qPrintable(error) << std::endl;
 		delete fieldArchive;
 		exit(1);
 	}
@@ -479,7 +478,7 @@ void CLI::commandScriptEdit()
 		delete fieldArchive;
 		exit(1);
 	}
-	qInfo() << qPrintable(QCoreApplication::translate("CLI", "Saved")) << qPrintable(args.targetFile());
+	std::cout << "Saved " << qPrintable(args.targetFile()) << std::endl;
 
 	delete fieldArchive;
 }
