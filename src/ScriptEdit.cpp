@@ -17,6 +17,8 @@
  ****************************************************************************/
 #include "ScriptEdit.h"
 #include "core/field/Section1File.h"
+#include "core/field/FieldPC.h"
+#include "core/field/FieldModelLoaderPC.h"
 
 ScriptEdit::ScriptEdit(Section1File *section1) :
     _section1(section1)
@@ -186,6 +188,70 @@ bool ScriptEdit::apply(const QJsonArray &ops, QString &error)
 			int row = int(_section1->grpScriptCount());
 			if (!_section1->insertGrpScript(row, group)) {
 				error = QString("op #%1 (add-entity): entity limit reached").arg(n);
+				return false;
+			}
+			_touched.insert(qMakePair(row, 0));
+			continue;
+		}
+
+		if (kind == "add-character") {
+			// Add a playable-character field model (Section 3) and a CHAR+PC entity for it (Section 1).
+			// {"op":"add-character","name":"pftifa","charId":2,"hrc":"AAGB","anims":["ABCD","ABCE","ABCF"],"charName":"..."}
+			QString name = op.value("name").toString();
+			int charId = op.value("charId").toInt(-1);
+			QString hrc = op.value("hrc").toString().toUpper();
+			QStringList anims;
+			for (const QJsonValue &a : op.value("anims").toArray()) {
+				anims.append(a.toString());
+			}
+			if (name.isEmpty() || name.size() > 8 || charId < 0 || hrc.isEmpty() || anims.isEmpty()) {
+				error = QString("op #%1 (add-character): need name (1..8), charId, hrc, anims").arg(n);
+				return false;
+			}
+			Field *field = _section1->field();
+			if (!field->isPC()) {
+				error = QString("op #%1 (add-character): PC fields only").arg(n);
+				return false;
+			}
+			FieldModelLoaderPC *ml = static_cast<FieldPC *>(field)->fieldModelLoader();
+			if (ml == nullptr || !ml->isOpen() || ml->modelCount() == 0) {
+				error = QString("op #%1 (add-character): model loader unavailable or empty").arg(n);
+				return false;
+			}
+			for (const GrpScript &g : _section1->grpScripts()) {
+				if (g.realName() == name) {
+					error = QString("op #%1 (add-character): entity '%2' already exists").arg(n).arg(name);
+					return false;
+				}
+			}
+			// Template: the first model in the field (lighting, scale flags); override identity and animations.
+			FieldModelInfosPC info = ml->modelInfos(0);
+			info.nameChar = op.contains("charName") ? op.value("charName").toString()
+			                                        : QString("%1_%2.char").arg(field->name(), name);
+			info.nameHRC = hrc.endsWith(".HRC") ? hrc : hrc + ".HRC";
+			info.anims.clear();
+			info.animsUnknown.clear();
+			quint16 animUnknown = info.animsUnknown.isEmpty() ? 1 : info.animsUnknown.first();
+			for (const QString &a : anims) {
+				info.anims.append(a);                 // e.g. "ACFE.aki" (as listed in the model loader)
+				info.animsUnknown.append(animUnknown);
+			}
+			int modelID = int(ml->modelCount());
+			ml->insertModelInfos(modelID, info);
+
+			// Entity: Init = CHAR modelID ; PC charId ; RET   Main = RET
+			const char initBytes[] = { char(0xA1), char(modelID), char(0xA0), char(charId), 0 };
+			QList<Opcode> initOps;
+			initOps.append(Opcode(initBytes, 2));
+			initOps.append(Opcode(initBytes + 2, 2));
+			initOps.append(Opcode(initBytes + 4, 1));
+			const char ret = 0;
+			GrpScript group(name);
+			group.setScript(0, Script(initOps));
+			group.setScript(1, Script(QList<Opcode>{ Opcode(&ret, 1) }));
+			int row = int(_section1->grpScriptCount());
+			if (!_section1->insertGrpScript(row, group)) {
+				error = QString("op #%1 (add-character): entity limit reached").arg(n);
 				return false;
 			}
 			_touched.insert(qMakePair(row, 0));
