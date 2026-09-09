@@ -165,6 +165,33 @@ bool ScriptEdit::apply(const QJsonArray &ops, QString &error)
 		QString kind = op.value("op").toString();
 		QString err;
 
+		if (kind == "add-entity") {
+			// Append a new non-model entity with empty Init/Main (each just RET).
+			QString name = op.value("name").toString();
+			if (name.isEmpty() || name.size() > 8) {
+				error = QString("op #%1 (add-entity): name must be 1..8 characters").arg(n);
+				return false;
+			}
+			for (const GrpScript &g : _section1->grpScripts()) {
+				if (g.realName() == name) {
+					error = QString("op #%1 (add-entity): entity '%2' already exists").arg(n).arg(name);
+					return false;
+				}
+			}
+			const char ret = 0;
+			Script retScript(QList<Opcode>{ Opcode(&ret, 1) });
+			GrpScript group(name);
+			group.setScript(0, retScript);
+			group.setScript(1, retScript);
+			int row = int(_section1->grpScriptCount());
+			if (!_section1->insertGrpScript(row, group)) {
+				error = QString("op #%1 (add-entity): entity limit reached").arg(n);
+				return false;
+			}
+			_touched.insert(qMakePair(row, 0));
+			continue;
+		}
+
 		int groupID, scriptID;
 		if (!resolveGroup(op.value("entity"), groupID, err) || !resolveScript(op, groupID, scriptID, err)) {
 			error = QString("op #%1: %2").arg(n).arg(err);
