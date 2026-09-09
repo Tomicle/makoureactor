@@ -39,6 +39,10 @@ const QList<OpcodeKey> &Census::trackedOpcodes()
 		// Entity definition and control
 		OpcodeKey::PC, OpcodeKey::CHAR_, OpcodeKey::CC, OpcodeKey::UC,
 		OpcodeKey::PDIRA, OpcodeKey::PTURA, OpcodeKey::PMOVA,
+		// Script requests (scenes driving other entities)
+		OpcodeKey::REQ, OpcodeKey::REQSW, OpcodeKey::REQEW,
+		OpcodeKey::PREQ, OpcodeKey::PRQSW, OpcodeKey::PRQEW,
+		OpcodeKey::CCANM, OpcodeKey::LADER, OpcodeKey::JUMP,
 		// Movement / placement
 		OpcodeKey::MOVE, OpcodeKey::CMOVE, OpcodeKey::MOVA, OpcodeKey::FMOVE,
 		OpcodeKey::XYZI, OpcodeKey::XYI, OpcodeKey::XYZ, OpcodeKey::AXYZI,
@@ -65,6 +69,9 @@ const QList<OpcodeKey> &Census::detailedOpcodes()
 		OpcodeKey::MMBud, OpcodeKey::MMBLK, OpcodeKey::MMBUK,
 		OpcodeKey::PC, OpcodeKey::CC, OpcodeKey::UC,
 		OpcodeKey::PDIRA, OpcodeKey::PTURA, OpcodeKey::PMOVA,
+		OpcodeKey::REQ, OpcodeKey::REQSW, OpcodeKey::REQEW,
+		OpcodeKey::PREQ, OpcodeKey::PRQSW, OpcodeKey::PRQEW,
+		OpcodeKey::CCANM,
 		OpcodeKey::SOLID, OpcodeKey::MAPJUMP, OpcodeKey::MINIGAME
 	};
 	return keys;
@@ -141,6 +148,29 @@ QJsonObject Census::opcodeDetail(const Opcode &opcode, const QList<QString> &ent
 		break;
 	case OpcodeKey::MAPJUMP:
 		detail["mapId"] = op.opcodeMAPJUMP.mapID;
+		break;
+	case OpcodeKey::REQ:
+	case OpcodeKey::REQSW:
+	case OpcodeKey::REQEW: {
+		int group = op.opcodeREQ.groupID;
+		detail["groupId"] = group;
+		if (group >= 0 && group < entityNames.size()) {
+			detail["entity"] = entityNames.at(group);
+		}
+		detail["scriptId"] = op.opcodeREQ.scriptIDAndPriority & 0x1F;
+		detail["priority"] = (op.opcodeREQ.scriptIDAndPriority >> 5) & 7;
+		break;
+	}
+	case OpcodeKey::PREQ:
+	case OpcodeKey::PRQSW:
+	case OpcodeKey::PRQEW:
+		detail["partyId"] = op.opcodePREQ.partyID;
+		detail["scriptId"] = op.opcodePREQ.scriptIDAndPriority & 0x1F;
+		detail["priority"] = (op.opcodePREQ.scriptIDAndPriority >> 5) & 7;
+		break;
+	case OpcodeKey::CCANM:
+		detail["animId"] = op.opcodeCCANM.animID;
+		detail["action"] = op.opcodeCCANM.standWalkRun;
 		break;
 	case OpcodeKey::MINIGAME:
 		detail["minigameId"] = op.opcodeMINIGAME.minigameID;
@@ -221,6 +251,7 @@ QJsonObject Census::fieldReport(int mapID, Field *field)
 		}
 
 		QJsonArray scriptSizes;
+		QJsonArray scriptOpcodeCounts;
 		QJsonArray scriptTexts;
 		int entityOpcodes = 0;
 		qsizetype entityBytes = 0;
@@ -229,6 +260,7 @@ QJsonObject Census::fieldReport(int mapID, Field *field)
 			const Script &script = scripts.at(scriptID);
 			qsizetype bytes = script.toByteArray().size();
 			scriptSizes.append(int(bytes));
+			scriptOpcodeCounts.append(int(script.size()));   // includes label pseudo-opcodes (0 bytes)
 			entityBytes += bytes;
 			if (_withScripts) {
 				QJsonObject text;
@@ -264,6 +296,7 @@ QJsonObject Census::fieldReport(int mapID, Field *field)
 			}
 		}
 		entity["scriptBytes"] = scriptSizes;
+		entity["scriptOpcodes"] = scriptOpcodeCounts;
 		if (_withScripts) {
 			entity["scripts"] = scriptTexts;
 		}

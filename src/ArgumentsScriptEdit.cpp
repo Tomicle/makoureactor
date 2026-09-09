@@ -26,6 +26,9 @@ ArgumentsScriptEdit::ArgumentsScriptEdit() : CommonArguments()
 	                     "\"index\"/\"from\"/\"to\"/\"at\" (opcode positions; negative counts from the end). "
 	                     "New opcodes come from \"hex\" (raw bytes) or \"copy\": {entity, script, index}.", "ops", "");
 	_ADD_FLAG("dry-run", "Apply the operations in memory and print the affected scripts without saving.");
+	_ADD_ARGUMENT("batch", "Directory of <field>.json ops files: apply every one of them to its field in a single "
+	                       "open/save of the archive (replaces --field/--ops). Prints one status line per field.", "batch", "");
+	_ADD_ARGUMENT("report", "With --batch: write a JSON report of patched/failed fields to this file.", "report", "");
 
 	_parser.addPositionalArgument(
 	    "target_file", QCoreApplication::translate("Arguments", "Output file (optional, defaults to in-place)."), "[target_file]"
@@ -52,6 +55,16 @@ QString ArgumentsScriptEdit::targetFile() const
 bool ArgumentsScriptEdit::dryRun() const
 {
 	return _parser.isSet("dry-run");
+}
+
+QString ArgumentsScriptEdit::batchDir() const
+{
+	return _parser.value("batch");
+}
+
+QString ArgumentsScriptEdit::reportFile() const
+{
+	return _parser.value("report");
 }
 
 void ArgumentsScriptEdit::parse()

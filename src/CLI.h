@@ -53,6 +53,7 @@ private:
 	static void commandTools();
 	static void commandCensus();
 	static void commandScriptEdit();
+	static void commandScriptEditBatch(const class ArgumentsScriptEdit &args);
 	static FieldArchive *openFieldArchive(const QString &ext, const QString &path);
 	static QList<int> selectFields(FieldArchive *fieldArchive, const QStringList &includePatterns, const QStringList &excludePatterns);
 	static CLIObserver observer;

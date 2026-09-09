@@ -404,9 +404,123 @@ void CLI::commandCensus()
 	delete fieldArchive;
 }
 
+static bool applyOpsToField(FieldArchive *fieldArchive, Field *field, const QJsonArray &ops, QString &error, QStringList *describe)
+{
+	Section1File *section1 = field->scriptsAndTexts();
+	if (section1 == nullptr || !section1->isOpen()) {
+		error = "cannot read scripts";
+		return false;
+	}
+	ScriptEdit edit(section1);
+	if (!edit.apply(ops, error)) {
+		return false;
+	}
+	int groupID, scriptID, opcodeID;
+	if (!section1->compileScripts(groupID, scriptID, opcodeID, error)) {
+		error = QString("compile failed at entity %1 script %2 opcode %3: %4").arg(groupID).arg(scriptID).arg(opcodeID).arg(error);
+		return false;
+	}
+	if (describe != nullptr) {
+		QList<QPair<int, int>> touched = edit.touched().values();
+		std::sort(touched.begin(), touched.end());
+		for (const QPair<int, int> &t : touched) {
+			describe->append(edit.describe(t.first, t.second));
+		}
+	}
+	section1->setModified(true);
+	field->setModified(true);
+	Q_UNUSED(fieldArchive)
+	return true;
+}
+
+void CLI::commandScriptEditBatch(const ArgumentsScriptEdit &args)
+{
+	QDir dir(args.batchDir());
+	QStringList files = dir.entryList(QStringList("*.json"), QDir::Files, QDir::Name);
+	if (files.isEmpty()) {
+		std::cerr << "No ops files in " << qPrintable(args.batchDir()) << std::endl;
+		exit(1);
+	}
+
+	FieldArchive *fieldArchive = openFieldArchive(args.inputFormat(), args.path());
+	if (fieldArchive == nullptr) {
+		exit(1);
+	}
+
+	QJsonArray patched, failed;
+	for (const QString &file : files) {
+		QString name = QFileInfo(file).completeBaseName();
+		QFile f(dir.filePath(file));
+		QJsonObject entry;
+		entry["field"] = name;
+		if (!f.open(QIODevice::ReadOnly)) {
+			entry["error"] = "cannot open ops file";
+			failed.append(entry);
+			continue;
+		}
+		QJsonParseError parseError;
+		QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &parseError);
+		if (parseError.error != QJsonParseError::NoError || !doc.isArray()) {
+			entry["error"] = "ops file is not a JSON array";
+			failed.append(entry);
+			continue;
+		}
+		QList<int> matches = selectFields(fieldArchive, QStringList(name), QStringList());
+		Field *field = matches.size() == 1 ? fieldArchive->field(matches.first()) : nullptr;
+		if (field == nullptr) {
+			entry["error"] = "field not found";
+			failed.append(entry);
+			continue;
+		}
+		QString error;
+		if (!applyOpsToField(fieldArchive, field, doc.array(), error, nullptr)) {
+			entry["error"] = error;
+			failed.append(entry);
+			std::cout << "FAIL  " << qPrintable(name) << ": " << qPrintable(error) << std::endl;
+			continue;
+		}
+		entry["ops"] = doc.array().size();
+		patched.append(entry);
+		std::cout << "ok    " << qPrintable(name) << std::endl;
+	}
+
+	if (!args.dryRun() && !patched.isEmpty()) {
+		FieldArchiveIO::ErrorCode err = fieldArchive->save(args.targetFile());
+		if (err != FieldArchiveIO::Ok) {
+			std::cerr << "Save failed (error code " << int(err) << ")" << std::endl;
+			delete fieldArchive;
+			exit(1);
+		}
+		std::cout << "Saved " << qPrintable(args.targetFile()) << " (" << patched.size() << " fields patched, "
+		          << failed.size() << " failed)" << std::endl;
+	}
+
+	if (!args.reportFile().isEmpty()) {
+		QJsonObject report;
+		report["archive"] = args.path();
+		report["patched"] = patched;
+		report["failed"] = failed;
+		QFile rf(args.reportFile());
+		if (rf.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			rf.write(QJsonDocument(report).toJson(QJsonDocument::Indented));
+		}
+	}
+	delete fieldArchive;
+	if (!failed.isEmpty()) {
+		exit(2);
+	}
+}
+
 void CLI::commandScriptEdit()
 {
 	ArgumentsScriptEdit args;
+	if (!args.batchDir().isEmpty()) {
+		if (args.path().isEmpty()) {
+			args.showHelp();
+		}
+		commandScriptEditBatch(args);
+		return;
+	}
 	if (args.help() || args.path().isEmpty() || args.field().isEmpty() || args.opsFile().isEmpty()) {
 		args.showHelp();
 	}

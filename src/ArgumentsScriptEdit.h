@@ -28,6 +28,8 @@ public:
 	QString opsFile() const;
 	QString targetFile() const;
 	bool dryRun() const;
+	QString batchDir() const;
+	QString reportFile() const;
 private:
 	void parse();
 	QString _target_file;
