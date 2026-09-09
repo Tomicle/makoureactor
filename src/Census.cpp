@@ -276,6 +276,41 @@ QJsonObject Census::fieldReport(int mapID, Field *field)
 	// availableBytesForScripts() is the total capacity of the script area
 	// (65535 minus header and entity table), not what is left.
 	qsizetype capacity = section1->availableBytesForScripts();
+	// Variables referenced by this field's scripts (bank, address, size). Temp banks 5/6 alias the same bytes.
+	{
+		QList<FF7Var> vars;
+		section1->searchAllVars(vars);
+		QSet<QString> seen;
+		QJsonArray varArray;
+		QJsonArray tempBytes;   // byte offsets in the 256-byte temp area touched by bank 5/6 accesses
+		QSet<int> tempSet;
+		for (const FF7Var &v : vars) {
+			QString key = QString("%1:%2:%3").arg(v.bank).arg(v.address).arg(int(v.size));
+			if (seen.contains(key)) {
+				continue;
+			}
+			seen.insert(key);
+			QJsonObject o;
+			o["bank"] = v.bank;
+			o["address"] = v.address;
+			o["size"] = v.size == FF7Var::Byte ? "byte" : (v.size == FF7Var::Bit ? "bit" : "word");
+			varArray.append(o);
+			if (v.bank == 5 || v.bank == 6) {
+				tempSet.insert(v.address);
+				if (v.size != FF7Var::Byte && v.size != FF7Var::Bit) {
+					tempSet.insert(v.address + 1);
+				}
+			}
+		}
+		QList<int> tempList = tempSet.values();
+		std::sort(tempList.begin(), tempList.end());
+		for (int b : tempList) {
+			tempBytes.append(b);
+		}
+		report["vars"] = varArray;
+		report["tempBytesUsed"] = tempBytes;
+	}
+
 	report["scriptBytesUsed"] = int(totalScriptBytes);
 	report["scriptBytesCapacity"] = int(capacity);
 	report["scriptBytesRemaining"] = int(capacity - totalScriptBytes);
