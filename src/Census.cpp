@@ -210,6 +210,12 @@ QJsonObject Census::fieldReport(int mapID, Field *field)
 				if (modelLoader != nullptr && modelID < modelLoader->modelCount()) {
 					entity["hrc"] = modelLoader->HRCName(modelID);
 					entity["modelName"] = modelLoader->charName(modelID);
+					entity["animCount"] = int(modelLoader->animCount(modelID));
+					QJsonArray anims;
+					for (const QString &a : modelLoader->ANames(modelID)) {
+						anims.append(a);
+					}
+					entity["anims"] = anims;
 				}
 			}
 		}

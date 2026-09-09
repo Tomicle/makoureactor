@@ -123,6 +123,15 @@ bool ScriptEdit::makeOpcode(const QJsonObject &op, Opcode &out, QString &error) 
 			error = QString("\"hex\" has %1 bytes but opcode %2 expects %3").arg(bytes.size()).arg(out.name()).arg(out.size());
 			return false;
 		}
+		// Conditional / jump opcodes built from hex: bind them to a label so compile() computes the offset.
+		if (op.contains("jumpTo")) {
+			if (!out.isJump()) {
+				error = QString("\"jumpTo\" given but opcode %1 is not a jump/if").arg(out.name());
+				return false;
+			}
+			out.setLabel(quint16(op.value("jumpTo").toInt()));
+			out.setBadJump(BadJumpError::Ok);
+		}
 		return true;
 	}
 
